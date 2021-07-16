@@ -56,12 +56,12 @@ def align(*args, timestamp_name='timestamp', prefixes=None,
                 dic.update({arg.loc[idx,timestamp_name] : {col:arg.loc[idx,col] for col in arg.columns}})
 
     # turn into time ser
-    ts = pd.DataFrame([val for key, val in dic.items()])
+    df = pd.DataFrame([val for key, val in dic.items()])
     
     # fill potential gaps ato method
     if method == 'forward': 
-        ts.fillna(method='ffill', axis=0, inplace=True)
+        df.fillna(method='ffill', axis=0, inplace=True)
     if method == 'backward': 
-        ts.fillna(method='bfill', axis=0, inplace=True)
+        df.fillna(method='bfill', axis=0, inplace=True)
     
-    return ts
+    return df
