@@ -107,35 +107,46 @@ def cast(df, keys, prefixes=None, method='columns'):
         print('No timestamp. No output.')
         return
     
+    # check whether keys separate rows with same timestamp
     if df[[timestamp_name]+keys].value_counts().max() > 1:
         print('Keys insufficient. No output')
         return
     
+    # prepare prefixes 
     if prefixes == None:
         prefixes = tuple(key+'_' for key in keys)
     else:
         prefixes = tuple(pf+'_' if pf else '' for key, pf in zip(keys, prefixes))
     
+    # build iterator for all combinations of key column values
+    keylists = [[]]
+    for key in keys:
+        keylists = [x+[k] for k in df[key].unique() for x in keylists]
+    
+    # collect columns to be distributed
     cols = [col for col in df.columns if col not in [timestamp_name]+keys]
     
-    timestamps = df[timestamp_name].unique()
-
     if method == 'columns':
-        dic = {ts : {timestamp_name:ts} for ts in timestamps}
-        for ts in timestamps:
-            for idx in df[df[timestamp_name] == ts].index:
-                keycode = '_'.join(pf+str(df.loc[idx, key]) for key, pf in zip(keys, prefixes))
-                dic[ts].update({keycode+'_'+col:df.loc[idx, col] for col in cols})
-        df = pd.DataFrame([val for val in dic.values()])
-
+        dfl = []   
+        for keylist in keylists:
+            keycode = '_'.join(pf+str(entry) for pf, entry in zip(prefixes, keylist))
+            dft = df.copy()
+            for key, entry in zip(keys, keylist):
+                dft = dft[dft[key] == entry]
+            dft.set_index(timestamp_name, drop=True, inplace=True)
+            dft = dft[cols]
+            dft.rename(columns = {x:keycode+'_'+x for x in cols}, inplace=True)
+            dfl.append(dft)
+        dfo = pd.concat(dfl, axis=1)
+    
     if method == 'dictionary':
+        timestamps = df[timestamp_name].unique()
         dic = {ts : {timestamp_name:ts} for ts in timestamps}
         for ts in timestamps:
             for col in cols:
                 dic[ts][col] = {'_'.join(pf+str(df.loc[idx, key]) for key, pf in zip(keys, prefixes)) : df.loc[idx, col]
                                 for idx in df[df[timestamp_name] == ts].index}
-        df = pd.DataFrame([val for val in dic.values()])
-    
-    df.set_index(timestamp_name, drop=True, inplace=True)
+        dfo = pd.DataFrame([val for val in dic.values()])
+        dfo.set_index(timestamp_name, drop=True, inplace=True)
 
-    return df
+    return dfo
