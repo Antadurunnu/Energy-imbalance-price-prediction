@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 def align(*args, timestamp_name='timestamp', prefixes=None,
-          method='forward'):
+          method='forward', value=None):
     
     '''
     takes arbitrarily many time series as positional arguments and aligns them 
@@ -19,12 +19,15 @@ def align(*args, timestamp_name='timestamp', prefixes=None,
     method: how to fill gaps arising from timestamps not present in all arguments
                   'forward' (def; fill gaps with last preceding value available)
                   'backward' (fill gaps with first succeeding value available)
+
+    value: constant value to be filled in instead of applying method
+           defaults to 0
     '''
     
     # for each arg, take index or first column in dt format as timestamp
     timestamp_names = []
     for arg in args:
-        if pd.api.types.is_datetime64_dtype(arg.index.dtype):
+        if pd.api.types.is_datetime64_any_dtype(arg.index.dtype):
             arg.reset_index(drop=False, inplace=True)
             timestamp_names.append(arg.columns[0])            
         else:
@@ -67,12 +70,16 @@ def align(*args, timestamp_name='timestamp', prefixes=None,
     df = pd.DataFrame([val for val in dic.values()])
     
     # fill potential gaps ato method
-    if method == 'forward': 
-        df.fillna(method='ffill', axis=0, inplace=True)
-    if method == 'backward': 
-        df.fillna(method='bfill', axis=0, inplace=True)
-    
+    if value != None: 
+        df.fillna(value=value, axis=0, inplace=True)
+    else:
+        if method == 'forward': 
+            df.fillna(method='ffill', axis=0, inplace=True)
+        if method == 'backward': 
+            df.fillna(method='bfill', axis=0, inplace=True)
+
     df.set_index(timestamp_name, drop=True, inplace=True)
+    df.sort_index(inplace=True)
     
     return df
 
