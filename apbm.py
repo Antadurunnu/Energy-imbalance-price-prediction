@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def align(*args, timestamp_name='timestamp', prefixes=None,
-          method='forward'):
+def align(*args, prefixes=None, method='forward', value=None):
     
     '''
     takes arbitrarily many time series as positional arguments and aligns them 
@@ -19,63 +18,56 @@ def align(*args, timestamp_name='timestamp', prefixes=None,
     method: how to fill gaps arising from timestamps not present in all arguments
                   'forward' (def; fill gaps with last preceding value available)
                   'backward' (fill gaps with first succeeding value available)
+
+    value: constant value to be filled in instead of applying method
+           defaults to 0
     '''
     
     # for each arg, take index or first column in dt format as timestamp
     timestamp_names = []
     for arg in args:
-        if pd.api.types.is_datetime64_dtype(arg.index.dtype):
-            arg.reset_index(drop=False, inplace=True)
-            timestamp_names.append(arg.columns[0])            
-        else:
+        if not pd.api.types.is_datetime64_any_dtype(arg.index.dtype):
             for col in arg.columns:
                 if pd.api.types.is_datetime64_dtype(arg[col].dtype):
-                    timestamp_names.append(col)
+                    arg.set_index(col, drop=True, inplace=True)
                     break
             else:
                 print('Encountered missing timestamps. No output.')
                 return
 
     # adapt args to common time period
-    dt_from = max(arg.loc[arg.index[0], ts] for arg, ts in zip(args,timestamp_names))
-    dt_to = min(arg.loc[arg.index[-1], ts] for arg, ts in zip(args,timestamp_names))
+    dt_from = max(arg.index[0] for arg in args)
+    dt_to = min(arg.index[-1] for arg in args)
     if dt_from > dt_to: 
-        print('Time periods do not intersect. No output.')
+        print('Time periods do not overlap. No output.')
         return
-    args = tuple(arg[arg[ts] >= dt_from][arg[ts] <= dt_to] for arg, ts in zip(args,timestamp_names))
+    args = tuple(arg[arg.index >= dt_from] for arg in args)
+    args = tuple(arg[arg.index <= dt_to] for arg in args)
 
     # reset column names
     if prefixes == None:
         prefixes = tuple(str(i+1)+'_' for i in range(len(args)))
     else:
         prefixes = tuple(pf+'_' if pf else '' for pf in prefixes)
-    for arg, ts, pf in zip(args, timestamp_names, prefixes):
-        arg.rename({col:pf+col for col in arg.columns if col != ts}, axis=1, inplace=True)
-        arg.rename({ts:timestamp_name}, axis=1, inplace=True)
+    for arg, pf in zip(args, prefixes):
+        arg.rename({col:pf+col for col in arg.columns}, axis=1, inplace=True)
     
-    # combine into dict
-    arg = args[0]
-    dic = {arg.loc[idx,timestamp_name] : {col:arg.loc[idx,col] for col in arg.columns} for idx in arg.index}
-    for arg in args[1:]:
-        for idx in arg.index:
-            try:
-                dic[arg.loc[idx,timestamp_name]].update({col:arg.loc[idx,col] for col in arg.columns})
-            except:
-                dic.update({arg.loc[idx,timestamp_name] : {col:arg.loc[idx,col] for col in arg.columns}})
-
-    # turn into time ser
-    df = pd.DataFrame([val for val in dic.values()])
+    # concatenate
+    df = pd.concat(args, axis=1)
     
     # fill potential gaps ato method
-    if method == 'forward': 
-        df.fillna(method='ffill', axis=0, inplace=True)
-    if method == 'backward': 
-        df.fillna(method='bfill', axis=0, inplace=True)
-    
-    df.set_index(timestamp_name, drop=True, inplace=True)
+    if value != None: 
+        df.fillna(value=value, axis=0, inplace=True)
+    else:
+        if method == 'forward': 
+            df.fillna(method='ffill', axis=0, inplace=True)
+        if method == 'backward': 
+            df.fillna(method='bfill', axis=0, inplace=True)
+
+    df.dropna(axis=0, inplace=True)
+    df.sort_index(inplace=True)
     
     return df
-
 
 
 def cast(df, keys, prefixes=None, method='columns'):
