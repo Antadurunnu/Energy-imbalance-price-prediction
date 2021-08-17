@@ -1,4 +1,5 @@
-# select features from feature_catalogue to be used for training and prediction
+# select features from feature_catalogue to be used for training and prediction.
+# See script.md for explanation
 feature_list = ['wind_speed', 
                  'imbalance_power', 
                  'epex_da', 
