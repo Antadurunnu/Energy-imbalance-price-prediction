@@ -36,7 +36,7 @@ times_std = 3
 # define list of splitting values for classification (via <=) or None for regression
 split_values = None
 split_values = [0]
-split_values = [0,25,50,75]
+split_values = [0,20,40,60]
 
 # define feature scaler
 scaler = None
